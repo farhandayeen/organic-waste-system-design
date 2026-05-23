@@ -1,0 +1,285 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id                  String             @id @default(uuid()) @db.Uuid
+  name                String
+  code                String             @unique
+  address             String?
+  phone               String?
+  email               String?
+  isActive            Boolean            @default(true) @map("is_active")
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+
+  users               User[]
+  members             Member[]
+  wasteCategories     WasteCategory[]
+  wasteDeposits       WasteDeposit[]
+  pointsTransactions  PointsTransaction[]
+  rewardClaims        RewardClaim[]
+  systemSettings      SystemSettings?
+  auditLogs           AuditLog[]
+  bulkImportJobs      BulkImportJob[]
+  settingsHistory     SettingsHistory[]
+
+  @@map("organizations")
+}
+
+model User {
+  id                    String             @id @default(uuid()) @db.Uuid
+  email                 String             @unique
+  phone                 String?            @unique
+  passwordHash          String             @map("password_hash")
+  firstName             String             @map("first_name")
+  lastName              String?            @map("last_name")
+  role                  String
+  bumdesId              String?            @map("bumdes_id") @db.Uuid
+  isActive              Boolean            @default(true) @map("is_active")
+  twoFactorEnabled      Boolean            @default(false) @map("two_factor_enabled")
+  twoFactorSecret       String?            @map("two_factor_secret")
+  lastLogin             DateTime?          @map("last_login")
+  lastPasswordChange    DateTime?          @map("last_password_change")
+  requirePasswordChange  Boolean            @default(false) @map("require_password_change")
+  createdAt             DateTime           @default(now()) @map("created_at")
+  updatedAt             DateTime           @updatedAt @map("updated_at")
+
+  organization          Organization?      @relation(fields: [bumdesId], references: [id], onDelete: SetNull)
+  memberProfile         Member[]
+  authoredDeposits      WasteDeposit[]     @relation("DepositInputBy")
+  verifiedDeposits      WasteDeposit[]     @relation("DepositVerifiedBy")
+  createdTransactions   PointsTransaction[] @relation("TransactionCreatedBy")
+  approvedClaims        RewardClaim[]      @relation("ClaimApprovedBy")
+  auditLogs             AuditLog[]
+  sessions              Session[]
+  bulkImportJobs        BulkImportJob[]    @relation("BulkImportCreatedBy")
+  settingsHistory       SettingsHistory[]  @relation("SettingsChangedBy")
+  passwordHistory       PasswordHistory[]
+
+  @@map("users")
+}
+
+model Member {
+  id                  String             @id @default(uuid()) @db.Uuid
+  userId              String?            @map("user_id") @db.Uuid
+  bumdesId            String             @map("bumdes_id") @db.Uuid
+  memberNumber        String?            @map("member_number")
+  fullName            String             @map("full_name")
+  phone               String?
+  address             String?
+  status              String             @default("active")
+  joiningDate         DateTime           @default(now()) @map("joining_date")
+  lastDepositDate     DateTime?          @map("last_deposit_date")
+  totalPoints         Decimal            @default(0) @db.Decimal(18, 2) @map("total_points")
+  totalDeposits       Decimal            @default(0) @db.Decimal(18, 2) @map("total_deposits")
+  totalWithdrawals    Decimal            @default(0) @db.Decimal(18, 2) @map("total_withdrawals")
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+
+  user                User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  organization        Organization       @relation(fields: [bumdesId], references: [id], onDelete: Cascade)
+  deposits            WasteDeposit[]
+  transactions        PointsTransaction[]
+  rewardClaims        RewardClaim[]
+
+  @@map("members")
+}
+
+model WasteCategory {
+  id              String           @id @default(uuid()) @db.Uuid
+  bumdesId        String           @map("bumdes_id") @db.Uuid
+  name            String
+  description     String?
+  pointsPerKg     Decimal          @default(0) @db.Decimal(18, 2) @map("points_per_kg")
+  isActive        Boolean          @default(true) @map("is_active")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  organization    Organization     @relation(fields: [bumdesId], references: [id], onDelete: Cascade)
+  deposits        WasteDeposit[]
+
+  @@map("waste_categories")
+}
+
+model WasteDeposit {
+  id               String           @id @default(uuid()) @db.Uuid
+  memberId         String           @map("member_id") @db.Uuid
+  bumdesId         String           @map("bumdes_id") @db.Uuid
+  categoryId       String?          @map("category_id") @db.Uuid
+  depositDate      DateTime         @map("deposit_date")
+  weightKg         Decimal          @db.Decimal(18, 2) @map("weight_kg")
+  pointsAwarded    Decimal          @db.Decimal(18, 2) @map("points_awarded")
+  status           String           @default("pending")
+  photoUrl         String?          @map("photo_url")
+  notes            String?
+  verifiedBy       String?          @map("verified_by") @db.Uuid
+  verifiedAt       DateTime?        @map("verified_at")
+  rejectionReason  String?          @map("rejection_reason")
+  inputMethod      String           @default("member") @map("input_method")
+  inputBy          String?          @map("input_by") @db.Uuid
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  member           Member           @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  organization     Organization     @relation(fields: [bumdesId], references: [id], onDelete: Cascade)
+  category         WasteCategory?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  verifiedByUser   User?            @relation("DepositVerifiedBy", fields: [verifiedBy], references: [id], onDelete: SetNull)
+  inputByUser      User?            @relation("DepositInputBy", fields: [inputBy], references: [id], onDelete: SetNull)
+
+  @@map("waste_deposits")
+}
+
+model PointsTransaction {
+  id              String            @id @default(uuid()) @db.Uuid
+  memberId        String            @map("member_id") @db.Uuid
+  bumdesId        String            @map("bumdes_id") @db.Uuid
+  type            String
+  amount          Decimal           @db.Decimal(18, 2)
+  description     String?
+  referenceId     String?           @map("reference_id") @db.Uuid
+  referenceType   String?           @map("reference_type")
+  createdBy       String?           @map("created_by") @db.Uuid
+  createdAt       DateTime          @default(now()) @map("created_at")
+
+  member          Member            @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  organization    Organization      @relation(fields: [bumdesId], references: [id], onDelete: Cascade)
+  createdByUser   User?             @relation("TransactionCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@map("points_transactions")
+}
+
+model RewardClaim {
+  id               String           @id @default(uuid()) @db.Uuid
+  memberId         String           @map("member_id") @db.Uuid
+  bumdesId         String           @map("bumdes_id") @db.Uuid
+  pointsClaimed    Decimal          @db.Decimal(18, 2) @map("points_claimed")
+  amountInRupiah   Decimal          @db.Decimal(18, 2) @map("amount_in_rupiah")
+  exchangeRate     Decimal          @db.Decimal(18, 4) @map("exchange_rate")
+  bankAccountNumber String          @map("bank_account_number")
+  bankAccountName  String           @map("bank_account_name")
+  bankName         String           @map("bank_name")
+  status           String           @default("pending")
+  approvedBy       String?          @map("approved_by") @db.Uuid
+  approvedAt       DateTime?        @map("approved_at")
+  approvalNotes    String?          @map("approval_notes")
+  rejectionReason  String?          @map("rejection_reason")
+  paidAt           DateTime?        @map("paid_at")
+  paymentProof     String?          @map("payment_proof")
+  requestedAt      DateTime         @default(now()) @map("requested_at")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  member           Member           @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  organization     Organization     @relation(fields: [bumdesId], references: [id], onDelete: Cascade)
+  approvedByUser   User?            @relation("ClaimApprovedBy", fields: [approvedBy], references: [id], onDelete: SetNull)
+
+  @@map("reward_claims")
+}
+
+model SystemSettings {
+  id                 String        @id @default(uuid()) @db.Uuid
+  bumdesId           String        @unique @map("bumdes_id") @db.Uuid
+  depositPointRate   Decimal       @default(0) @db.Decimal(18, 2) @map("deposit_point_rate")
+  rewardExchangeRate Decimal       @default(0) @db.Decimal(18, 4) @map("reward_exchange_rate")
+  settings           Json?
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+
+  organization       Organization  @relation(fields: [bumdesId], references: [id], onDelete: Cascade)
+
+  @@map("system_settings")
+}
+
+model AuditLog {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String?   @map("user_id") @db.Uuid
+  bumdesId     String?   @map("bumdes_id") @db.Uuid
+  action       String
+  entityType   String    @map("entity_type")
+  entityId     String?   @map("entity_id")
+  oldValues    Json?     @map("old_values")
+  newValues    Json?     @map("new_values")
+  ipAddress    String?   @map("ip_address")
+  userAgent    String?   @map("user_agent")
+  status       String    @default("success")
+  errorMessage String?   @map("error_message")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  organization Organization? @relation(fields: [bumdesId], references: [id], onDelete: SetNull)
+
+  @@map("audit_logs")
+}
+
+model Session {
+  id            String   @id @default(uuid()) @db.Uuid
+  sessionToken  String   @unique @map("session_token")
+  userId        String   @map("user_id") @db.Uuid
+  expires       DateTime
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model LoginAttempt {
+  id         String   @id @default(uuid()) @db.Uuid
+  email      String
+  ipAddress  String   @map("ip_address")
+  success    Boolean
+  reason     String?
+  timestamp  DateTime @default(now())
+
+  @@map("login_attempts")
+}
+
+model BulkImportJob {
+  id               String    @id @default(uuid()) @db.Uuid
+  bumdesId         String    @map("bumdes_id") @db.Uuid
+  createdBy        String?   @map("created_by") @db.Uuid
+  type             String
+  fileName         String?   @map("file_name")
+  status           String
+  totalRecords     Int?      @map("total_records")
+  processedRecords Int?      @map("processed_records")
+  errorReport      Json?     @map("error_report")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  organization     Organization @relation(fields: [bumdesId], references: [id], onDelete: Cascade)
+  createdByUser    User?        @relation("BulkImportCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@map("bulk_import_jobs")
+}
+
+model SettingsHistory {
+  id          String    @id @default(uuid()) @db.Uuid
+  bumdesId    String    @map("bumdes_id") @db.Uuid
+  changedBy   String?   @map("changed_by") @db.Uuid
+  changes     Json
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [bumdesId], references: [id], onDelete: Cascade)
+  changedByUser User?        @relation("SettingsChangedBy", fields: [changedBy], references: [id], onDelete: SetNull)
+
+  @@map("settings_history")
+}
+
+model PasswordHistory {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  passwordHash String   @map("password_hash")
+  changedAt    DateTime @default(now()) @map("changed_at")
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_history")
+}
