@@ -35,7 +35,8 @@ export const authOptions: NextAuthOptions = {
             status: 'failure',
             errorMessage: 'Invalid credentials',
           });
-          throw new Error('Invalid email or password');
+
+          return null;
         }
 
         if (!user.isActive) {
@@ -46,7 +47,8 @@ export const authOptions: NextAuthOptions = {
             status: 'failure',
             errorMessage: 'User account is inactive',
           });
-          throw new Error('Your account has been suspended');
+
+          return null;
         }
 
         await updateLastLogin(user.id);
@@ -59,7 +61,7 @@ export const authOptions: NextAuthOptions = {
         });
 
         return {
-          id: user.id,
+          id: String(user.id),
           email: user.email,
           name: `${user.firstName} ${user.lastName || ''}`.trim(),
           role: user.role as 'member' | 'admin_bumdes' | 'super_admin',
